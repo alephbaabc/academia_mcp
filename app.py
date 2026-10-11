@@ -3,8 +3,7 @@ import subprocess
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import urllib.request
-import urllib.error
+import http.client
 
 BACKEND_PORT = 10001
 backend_process = None
@@ -40,33 +39,42 @@ class ProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def proxy_request(self, method):
-        target_url = f"http://127.0.0.1:{BACKEND_PORT}{self.path}"
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length) if content_length > 0 else None
         
         headers = {key: val for key, val in self.headers.items()}
         headers['Host'] = f"127.0.0.1:{BACKEND_PORT}"
-        
-        req = urllib.request.Request(target_url, data=body, headers=headers, method=method)
+        # Remove hop-by-hop headers
+        headers.pop('Transfer-Encoding', None)
+
+        conn = http.client.HTTPConnection("127.0.0.1", BACKEND_PORT, timeout=120)
         try:
-            with urllib.request.urlopen(req) as resp:
-                self.send_response(resp.status)
-                for header, val in resp.headers.items():
-                    if header.lower() not in ['transfer-encoding', 'connection']:
-                        self.send_header(header, val)
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(resp.read())
-        except urllib.error.HTTPError as e:
-            self.send_response(e.code)
+            conn.request(method, self.path, body=body, headers=headers)
+            resp = conn.getresponse()
+            
+            self.send_response(resp.status)
+            for header, val in resp.getheaders():
+                if header.lower() not in ['transfer-encoding', 'connection']:
+                    self.send_header(header, val)
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(e.read())
+
+            # Stream chunks down instead of blocking
+            while True:
+                chunk = resp.read(1024)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                self.wfile.flush()
         except Exception as e:
-            self.send_response(502)
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(str(e).encode())
+            try:
+                self.send_response(502)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+            except:
+                pass
+        finally:
+            conn.close()
 
     def log_message(self, format, *args):
         return
@@ -74,7 +82,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     thread = threading.Thread(target=start_backend, daemon=True)
     thread.start()
-    time.sleep(3)  # Wait for backend to spin up
+    time.sleep(3)
 
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), ProxyHandler)
