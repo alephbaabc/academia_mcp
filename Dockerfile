@@ -2,8 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies including git required by academic libraries
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+# Install system dependencies including git and graphics libraries for OpenCV/OCR
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Suppress warnings and configure git-python behavior
