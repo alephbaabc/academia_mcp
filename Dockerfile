@@ -1,37 +1,21 @@
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm
+FROM python:3.11-slim
 
 WORKDIR /app
 
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
+# Suppress the root user warning from pip
+ENV PIP_ROOT_USER_ACTION=ignore
 
-RUN apt-get update
-RUN apt-get install -y \
-    curl \
-    build-essential \
-    gcc \
-    make \
-    g++ \
-    git \
-    python3-dev \
-    libffi-dev \
-    openssl \
-    perl \
-    texlive \
-    texlive-xetex \
-    texlive-luatex \
-    ghostscript \
-    fontconfig \
-    latexmk \
-    texlive-latex-recommended \
-    texlive-latex-extra \
-    texlive-fonts-recommended \
-    texlive-science
+# Install the uv package manager
+RUN pip install --no-cache-dir uv
 
-COPY . /app
-RUN uv sync --no-dev && rm -rf /root/.cache/uv
+# Copy repository files
+COPY . .
 
-ENV PATH="/app/.venv/bin:$PATH"
+# Install dependencies
+RUN uv sync
 
-ENTRYPOINT []
-CMD ["python", "-m", "academia_mcp"]
+# Expose Render's standard web port
+EXPOSE 10000
+
+# Start Academix in SSE transport mode on port 10000
+CMD ["uv", "run", "academix", "--transport", "sse", "--port", "10000"]
