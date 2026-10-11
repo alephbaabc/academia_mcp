@@ -18,4 +18,4 @@ RUN uv sync
 EXPOSE 10000
 
 # Start Academix in SSE transport mode on port 10000
-CMD ["uv", "run", "academix", "--transport", "sse", "--port", "10000"]
+CMD ["python", "-m", "academia_mcp", "--transport", "streamable-http", "--port", "10000"]
