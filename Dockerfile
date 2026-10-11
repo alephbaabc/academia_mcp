@@ -26,4 +26,4 @@ RUN uv sync
 EXPOSE 10000
 
 # Start academia_mcp in SSE transport mode on port 10000
-CMD ["uv", "run", "python", "-m", "academia_mcp", "--transport", "streamable-http", "--port", "10000"]
+CMD ["uv", "run", "python", "-m", "academia_mcp", "--transport", "http", "--port", "10000"]
