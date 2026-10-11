@@ -16,7 +16,7 @@ ENV GIT_PYTHON_REFRESH=quiet
 # Install the uv package manager
 RUN pip install --no-cache-dir uv
 
-# Copy repository files
+# Copy repository files including app.py wrapper
 COPY . .
 
 # Install dependencies
@@ -25,5 +25,5 @@ RUN uv sync
 # Expose Render's standard web port
 EXPOSE 10000
 
-# Start academia_mcp in SSE transport mode on port 10000
-CMD ["uv", "run", "python", "-m", "academia_mcp", "--transport", "streamable-http", "--port", "10000"]
+# Start the proxy wrapper script
+CMD ["uv", "run", "python", "app.py"]
