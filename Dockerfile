@@ -24,4 +24,4 @@ RUN uv sync
 EXPOSE 10000
 
 # Directly launch academia_mcp on Render's required port using streamable-http
-CMD ["uv", "run", "python", "-m", "academia_mcp", "--transport", "streamable-http", "--port", "10000"]
+CMD ["uv", "run", "python", "app.py"]
