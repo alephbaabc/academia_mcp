@@ -2,12 +2,9 @@ import os
 import subprocess
 import threading
 import time
-import httpx
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-import uvicorn
-
-app = FastAPI(title="Academia MCP Proxy")
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.request
+import urllib.error
 
 BACKEND_PORT = 10001
 backend_process = None
@@ -21,34 +18,52 @@ def start_backend():
     ]
     backend_process = subprocess.Popen(cmd)
 
-@app.on_event("startup")
-def startup_event():
-    thread = threading.Thread(target=start_backend, daemon=True)
-    thread.start()
-    time.sleep(3)  # Give the backend server a moment to spin up
+class ProxyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/" or self.path == "":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"healthy","service":"academia_mcp"}')
+            return
+        self.proxy_request("GET")
 
-@app.get("/")
-def root_health_check():
-    return {"status": "healthy", "service": "academia_mcp", "transport": "streamable-http"}
+    def do_POST(self):
+        self.proxy_request("POST")
 
-@app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
-async def proxy(request: Request, path_name: str):
-    backend_url = f"http://127.0.0.1:{BACKEND_PORT}/{path_name}"
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        req_content = await request.body()
-        response = await client.request(
-            method=request.method,
-            url=backend_url,
-            headers=dict(request.headers),
-            params=request.query_params,
-            content=req_content,
-        )
-        return StreamingResponse(
-            response.aiter_bytes(),
-            status_code=response.status_code,
-            headers=dict(response.headers)
-        )
+    def proxy_request(self, method):
+        target_url = f"http://127.0.0.1:{BACKEND_PORT}{self.path}"
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length) if content_length > 0 else None
+        
+        headers = {key: val for key, val in self.headers.items()}
+        
+        req = urllib.request.Request(target_url, data=body, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req) as resp:
+                self.send_response(resp.status)
+                for header, val in resp.headers.items():
+                    if header.lower() not in ['transfer-encoding', 'connection']:
+                        self.send_header(header, val)
+                self.end_headers()
+                self.wfile.write(resp.read())
+        except urllib.error.HTTPError as e:
+            self.send_response(e.code)
+            self.end_headers()
+            self.wfile.write(e.read())
+        except Exception as e:
+            self.send_response(502)
+            self.end_headers()
+            self.wfile.write(str(e).encode())
+
+    def log_message(self, format, *args):
+        return
 
 if __name__ == "__main__":
+    thread = threading.Thread(target=start_backend, daemon=True)
+    thread.start()
+    time.sleep(3)  # Wait for backend to spin up
+
     port = int(os.environ.get("PORT", 10000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    server = HTTPServer(("0.0.0.0", port), ProxyHandler)
+    server.serve_forever()
