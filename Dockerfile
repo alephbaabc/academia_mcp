@@ -20,4 +20,4 @@ RUN uv sync
 EXPOSE 10000
 
 # Use native SSE transport which Gemini's web validator expects
-CMD ["uv", "run", "python", "-m", "academia_mcp", "--transport", "sse", "--port", "10000"]
+CMD ["uv", "run", "python", "app.py"]
